@@ -1,0 +1,1020 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SM Logic Fuzzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+		body {
+            display: flex;
+            flex-direction: column;
+            align-items: left;
+            font-family: Arial;
+            font-weight: bold;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            text-align: center;
+            color: #4A95A5;
+            background-color: #141E24;
+        }
+        .main-site-container {
+            display: flex;
+            width: 100%;
+            justify-content: flex-start;
+            margin-top: 0px;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+        .chart-container {
+			display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 400px;
+			
+            flex-grow: 1;
+            height: calc(100vh - 105px);
+            margin-left: 20px;
+            border: 4px solid #316E7D;
+            border-radius: 40px;
+            background-color: #18373D;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            box-sizing: border-box;
+            width: 100%;
+        }
+        #chart-container {
+            width: 100%;
+            height: 100%;
+        }
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+		
+		/* side panel hover tooltips */
+		.tooltip {
+            position: absolute;
+            visibility: hidden;
+            background-color: #224E56;
+            color: #92C5CE;
+            text-align: left;
+            padding: 5px 10px;
+            border-radius: 20px;
+			border: 4px solid #397F8E;
+            font-size: 13px;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s;
+			margin-top: -25px;
+        }
+        .hover-target:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+		#tooltipHeader {
+			font-size: 18px;
+			margin-bottom: 5px;
+			margin-top: 5px;
+			color:#B8D1D6;
+            text-align: center;
+		}
+		
+		/* side panel elements */
+		.panelBaseElement {
+			padding:10px;
+			border-radius:0;
+			border:4px solid #316e7d;
+			overflow:auto;
+			scrollbar-width:thin;
+			scrollbar-color:#888 #484848;
+			box-sizing:border-box;
+			transition:opacity .1s;
+			flex-grow:1;
+			width:100%;
+			font-size:22px;
+			background-color:#18373d;
+			color:#92c5ce;
+			flex-grow:1;
+			font-weight:700;
+			font-family:Arial;
+			margin:-2px 0;
+		}		
+		.panelLeftElement {
+			text-align: left;
+			width: 130px;
+		}
+		.panelRightElement {
+			margin-left: -4px;
+		}
+		.panelMiddleElement {
+			margin-left: -4px;
+		}
+		.panelLastElement {
+			margin-bottom: 25px;
+			border-radius: 0 0 25px 25px;
+		}
+		.panelFirstElement {
+			border-radius: 25px 25px 0 0;
+		}
+		.panelSigleElement {
+			margin-bottom: 25px;
+			border-radius: 25px 25px 25px 25px;
+		}
+		
+		button:active {
+            color: #92C5CE;
+            opacity: 0.7;
+        }
+		input:focus {
+            outline: none;
+            border-color: #3F8C9E;
+            background-color: #1E454C;
+            box-shadow: 0 0 15px #295F68;
+			z-index: 1;
+        }
+		
+		/* overlay for loading screen while fuzzing */
+		.overlay {
+			display: none;
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			overflow: auto;
+			background-color: rgba(0,0,0,0.6);
+			z-index: 1000;
+		}
+		.overlay-content {
+			position: relative;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			padding: 20px;
+			width: 80%;
+			max-width: 500px;
+			text-align: center;
+			border-radius: 45px;
+			border: 6px solid #316E7D;
+			background-color: #18373D;
+			box-shadow: 0 0 20px #295F68;
+			color: #92C5CE;
+		}
+		#CancelTestButton {
+			border: 5px solid #316E7D;
+			border-radius: 25px 25px 25px 25px;
+			width: 75%;
+			font-size: 40;
+			padding: 20px;
+			background-color: #1C4047;
+			margin-bottom: 10px;
+			margin-top: 3px;
+			box-shadow: 0 0 20px #295F68;
+		}
+		
+		
+    </style>
+</head>
+<body>
+    <h1>Scrap Mechanic Logic Fuzzer v0.1.0</h1>
+	<!-- div to split the site into 2 containers side by side -->
+    <div class="main-site-container">
+		
+		<!-- div containing the entire side panel on the right -->
+		<div>
+		
+			<!-- file input block -->
+			<input type="file" id="fileInput" style="display: none;" accept=".json">
+			<h1 class="panelBaseElement panelFirstElement">File selection</h1>
+			<h1 id="LoadedFileName" class="panelBaseElement" style="margin-top:-4px;">No file loaded</h1>
+			<button id="ImportBlueprint" class="panelBaseElement panelLastElement">Import blueprint file</button>
+			
+			<!-- Test config block -->
+			<h1 class="panelBaseElement panelFirstElement">Test config</h1>
+			<div style="display: flex;">
+				<div class="hover-target"><h1 class="panelBaseElement panelLeftElement">Test:</h1>
+					<span class="tooltip">
+						<h1 id="tooltipHeader"> Test expression</h1> 
+						Input a test expression here. <br>
+						This will be evaluated to <br>
+						brute-force and equality check <br>
+						the circuit's output.<br> 
+						<h1 id="tooltipHeader">Variables</h1> 
+						In1 = input 1 (green gates)<br> 
+						In2 = input 2 (blue gates)
+						<h1 id="tooltipHeader">Allowed operations</h1> 
+						Addition : A+B. <br> 
+						Subtraction : A-B <br> 
+						Multiplication: A*B <br> 
+						Division : A/B <br> 
+						Modulo : A%B <br> 
+						Bitwise AND : A&B <br> 
+						Bitwise OR : A|B <br> 
+						Bitwise XOR : A^B <br> 
+						Left bitshift : A&lt&ltB<br> 
+						Right bitshift : A&gt&gtB<br> 
+						<h1 id="tooltipHeader">Priorities(high->low)</h1> 
+						1. () <br> 
+						2. &, |, ^, &lt&lt, &gt&gt,<br> 
+						3. *, /, %<br>
+						4. -, +
+						<h1 id="tooltipHeader">Example equations</h1> 
+						In1+In2<br>
+						In1*In2%4</br>
+						In1^(In2&lt&lt4)
+					</span>
+				</div>
+				<input id="testConfig0" type="text" class="panelBaseElement panelRightElement">
+			</div>
+			<div style="display: flex;">
+				<div class="hover-target"><h1 class="panelBaseElement panelLeftElement">Ticks:</h1>
+					<span class="tooltip">
+						<h1 id="tooltipHeader"> Tick timeout</h1>
+						
+						Enter amount of ticks <br>
+						to set a timeout threshold. <br><br>
+						This will ensure that the algorithm <br>
+						wont get stuck in infinite loops <br>
+						while simulating a problematic test case. <br><br>
+						If a timeout occurs, <br>
+						it will be listed in the graphs/data.
+					</span>
+				</div>
+				<input id="testConfig1" type="text" class="panelBaseElement panelRightElement">
+			</div>
+			<div style="display: flex;">
+				<div class="hover-target"><h1 class="panelBaseElement panelLeftElement">2sComp:</h1>
+					<span class="tooltip">
+						<h1 id="tooltipHeader"> Use two's complement</h1>
+						
+						If this setting is set to "true",<br>
+						negative outputs are represented<br>
+						in two's complement.<br>
+						<br>
+						If this setting is set to "false",<br>
+						negative outputs will be represented <br>
+						such that the most significant bit (MSB) <br>
+						is used as the sign bit, <br>
+						while all other bits represent<br>
+						the absolute value.
+						
+					</span>
+				</div>
+				<button id="UseTwosComplement" class="panelBaseElement panelRightElement">false</button>
+			</div>
+			<button id="StartTest" class="panelBaseElement panelLastElement">Start test</button>
+			
+			<!-- chart config block -->
+			<h1 class="panelBaseElement panelFirstElement">Chart config</h1>
+			<div style="display: flex;">
+				<button id="pastChart" class="panelBaseElement" style="padding:0px; transform: scaleX(-1)">&#10132</button>
+				<h1 class="panelBaseElement panelMiddleElement">Data</h1>
+				<button id="nextChart" class="panelBaseElement panelRightElement" style="padding:0px">&#10132</button>				 
+			</div>
+			<div style="display: flex;">
+				<div class="hover-target"><h1 class="panelBaseElement panelLeftElement" style="border-radius: 0 0 0 25px">Log view:</h1>
+					<span class="tooltip">
+						<h1 id="tooltipHeader"> Logarithmic view</h1>
+						if setting is set to true,<br> 
+						chart will display data in Logarithmic view, <br>
+						otherwise its going to be displaying it linearly.
+					</span>
+				</div>
+				<button id="UseLogView" class="panelBaseElement panelRightElement" style="border-radius: 0 0 25px 0">false</button>
+			</div>
+		</div>
+        
+		<div class="chart-container">
+            <div id="chart-container">
+                <canvas id="lineChart"></canvas>
+            </div>
+        </div>
+    </div>
+	
+	<!-- overlay for loading screen while fuzzing -->
+	 <div id="overlay" class="overlay">
+        <div class="overlay-content">
+            <h1>Running test...</h1>
+            <p id="progressText0" style="font-size:30px; margin: 0px">Loading...</p>
+            <p style="margin-bottom: 0px" id="progressText1">Loading...</p>
+            <button id="CancelTestButton" class="panelBaseElement">Cancel test</button>
+        </div>
+    </div>
+        <script>
+		
+		const logicGateUUID = "9f0f56e8-2c31-4d83-996c-d00a9b296c3f";
+		
+		// configuration variables for testing and chart rendering/all UI inputs are stored in these vars.
+		var testConfig = [0, 0, 0, 20]; // [test equation, tick timeout, use twos complement, loggedCases cap per case]
+		var chartConfig = [0, 0]; // [show logarithmic view, chart current page index]
+		var fileContents; // just the raw file contents of the loaded json file
+		
+		// Entire migrated circuit:
+		// these arrays are structured so that the first index of any of these arrays always refers to the same gate. 
+		// gate connections are stored a little different than in blueprints, 
+		// they are stored in reverse (so connections arent stored as outgoing to other gates,
+		// but rather pointing backwards to all the inputs of a gate)
+		var gateTypes = []; // gateTypes: (AND=0, OR=1, XOR=2, NAND=3, NOR=4, XNOR=5)
+		var gateConnections = [];
+		var gateStates = [];
+		
+		// Entry/Exit nodes to keep track of
+		var ioGatesIndexes = []; // contains all indexes of the io gates in order
+		var ioValues = [0, 0, 0]; // contains values while fuzzing the circuit
+		
+		// Analytic data thats collected while test is running, and then rendered with chart.js 
+		var errorCases = [];
+		var rawChartData = [[], [], []]; //[0] = settleTime, [1] = resultOutputTime, [2] = how many gate- updates per updateLogic()
+		var rawChartDataLoggedCases;
+		var ChartLabels = [];
+
+		// State and progress of the testing process, if true UI will be blocked and loading screen will appear
+		var testIsRunning = false;
+		var testCurrentCoords = [];
+		
+		// Worker for the fuzzing itself
+		const worker = new Worker('worker.js');
+		
+		//updated the progress values displayed on the overlay when fuzzing
+		function UpdateProgressText()
+		{
+			if(testIsRunning)
+			{
+				// current fuzzing case
+				let current = testCurrentCoords[0]*Math.pow(2, ioGatesIndexes[1].length)+testCurrentCoords[1];
+				
+				// total fuzzing cases
+				let max = Math.pow(2, ioGatesIndexes[0].length)*Math.pow(2, ioGatesIndexes[1].length);
+				
+				// current progress in %
+				let testProgressPercent = Math.round(current/max*1000)/10;
+				
+				
+				// update the html texts and ensure the num. is rendered with excactly 1 decimal point, as a ".0" wont be displayed if the number is an integer.
+				// theres prob. a better way of doing this, but idc. 
+				if(testProgressPercent % 1 !== 0)
+				{
+					document.getElementById("progressText0").textContent = testProgressPercent + "%";
+				}
+				else
+				{
+					document.getElementById("progressText0").textContent = testProgressPercent + ".0%";
+				}
+				document.getElementById("progressText1").textContent = "(" + current + " of " + max + " cases)";
+				
+			}
+			requestAnimationFrame(UpdateProgressText);
+		}
+		requestAnimationFrame(UpdateProgressText);
+		
+		// Handle callback of the simulation worker
+		worker.onmessage = function(event) {
+			// always has a hard coded value at event.data[0], wich indicates what data was sent and what to do with it.
+			if(event.data[0] === 0)
+			{
+				// if code is 0, the test has been finished
+				// store the fuzzing results, update the chart and hide the loading screen overlay 
+				rawChartData = event.data[1];
+				rawChartDataLoggedCases = event.data[2];
+				
+				UpdateChart();
+				overlay.style.display = 'none';
+				testIsRunning = false;
+				console.log("test completed!");
+			}
+			else if(event.data[0] === 1)
+			{
+				// if code is 1, the worker returns its current fuzzing values wich will now be stored
+				// this is so that the progress on the overlay can then use these values to update the loading screen overlay progress values
+				testCurrentCoords = event.data[1];
+			}
+		};
+
+		// Handle errors from the worker
+		worker.onerror = function(error) {
+			console.error('Worker error:', error);
+		};
+		
+		// function initializing and starting the Fuzzing process
+		function InitializeAndStartFuzz()
+		{
+			//enable the loading screen overlay
+			testIsRunning = true;
+			overlay.style.display = 'block';
+			console.log("starting test...");
+			
+			//initialize simulation variables
+			gateTypes = [];
+			gateConnections = [];
+			gateStates = [];
+			gateIds = [];
+			ioGatesIndexes = [];
+			ioValues = [0, 0, 0];
+			settleTimeChart = [];
+			rawChartData = [[], [], []];
+			
+			//search for ioGates and get them as the json object
+			let ioGates = [];
+			ioGates[0] = findIoGates(fileContents, "68FF88", "19E753", logicGateUUID);
+			ioGates[1] = findIoGates(fileContents, "4C6FE3", "0A3EE2", logicGateUUID);
+			ioGates[2] = findIoGates(fileContents, "F06767", "D02525", logicGateUUID);
+			
+			// Migrate all Gates into the gateTypes, gateConnections and gateIds. 
+			// also its going to initialize an empty array for gateStates.
+			MigrateAllGates(fileContents);
+			
+			//extract the migrated-index from the ioGates json
+			ioGatesIndexes[0] = MigrateToIoIndexes(ioGates[0], "68FF88", "19E753");
+			ioGatesIndexes[1] = MigrateToIoIndexes(ioGates[1], "4C6FE3", "0A3EE2");
+			ioGatesIndexes[2] = MigrateToIoIndexes(ioGates[2], "F06767", "D02525");
+			
+			// Start the fuzzing worker with initialized arrays
+			worker.postMessage([gateTypes, gateConnections, gateStates, ioGatesIndexes, testConfig]);
+		}
+		
+		// updates the chart values
+		function UpdateChart()
+		{
+			let titleLabels = 
+			[
+				"settle time (x=ticks, y=counted cases)", 
+				"result output time (x=ticks, y=counted cases)", 
+				"gate update load per tick(x=ticks, y=counted cases)"
+			];
+			
+			lineChart.data.datasets[0].label = titleLabels[chartConfig[1]];
+			
+			// temporary array to hold new labels(text below all chart bars)
+			chartLabels = [];
+			
+			if(chartConfig[1] >= 0 && chartConfig[1] <= 1)
+			{
+				chartLabels.push("timed out");
+				for(let i = 0; i < rawChartData[chartConfig[1]].length - 1; i++)
+				{
+					chartLabels.push(i);
+				}
+			}
+			
+			lineChart.data.labels = chartLabels;
+			lineChart.data.datasets[0].data = rawChartData[chartConfig[1]];
+			lineChart.update();
+		}		
+		
+		// extract all migrated-indexes from an array of gates in json obj format
+		function MigrateToIoIndexes(input, startingGateColor, secondaryGatesColor)
+		{
+			let output = [];
+			let startingGateIndex = 0;
+			
+			// search for the LSB (startingGateColor) color in the input array
+			for(let i = 0; i < input.length; i++)
+			{
+				if(input[i].color === startingGateColor)
+				{
+					// if found, store the index to startingGateIndex
+					startingGateIndex = i;
+					break;
+				}
+			}
+			
+			// determain, in what orientation the row of gates is.
+			// this is done by iterating through the array, and checking if the color matches.
+			// if so, find out if its right next to the startingGate, and if so store the orientation via the hardcoded switch case.
+			let onXaxis = 0;
+			for(let i = 0; i < input.length; i++)
+			{
+				if(input[i].color === secondaryGatesColor)
+				{
+					const dx = input[i].pos.x - input[startingGateIndex].pos.x;
+					const dy = input[i].pos.y - input[startingGateIndex].pos.y;
+					
+					switch (true) {
+						case (dx === 1 && dy === 0):
+							onXaxis  = 0; // Moving right
+							break;
+						case (dx === -1 && dy === 0):
+							onXaxis  = 0; // Moving left
+							break;
+						case (dx === 0 && dy === 1):
+							onXaxis = 1; // Moving up
+							break;
+						case (dx === 0 && dy === -1):
+							onXaxis = 1; // Moving down
+							break;
+						default:
+							break;
+					}
+				}
+			}
+			
+			// store wanted x or y value, depending on the orientation of the gates.
+			let isolatedAxisValues = [];
+			for(let i = 0; i < input.length; i++)
+			{
+				isolatedAxisValues.push(
+				(input[i].pos.x * !onXaxis) + 
+				(input[i].pos.y * onXaxis));
+			}
+			
+			// sort isolatedAxisValues and move input array values the same within its 
+			// array to sort the entire input array from LSB to MSB
+			// yes, this is a bubble sort. Dont judge me
+			let n = input.length;
+			do {
+				swapped = false;
+				for (let i = 0; i < n - 1; i++) {
+					if (isolatedAxisValues[i] > isolatedAxisValues[i + 1]) {
+						let temp = isolatedAxisValues[i];
+						isolatedAxisValues[i] = isolatedAxisValues[i + 1];
+						isolatedAxisValues[i + 1] = temp;
+						
+						temp = input[i];
+						input[i] = input[i + 1];
+						input[i + 1] = temp;
+						swapped = true;
+					}
+				}
+				n--; 
+			} while (swapped);
+			
+			
+			// ensure that the array is sorted so that the starting gate is at index 0
+			// if not, reverse it.
+			if(input[0].color !== startingGateColor)
+			{
+				let reverseBuffer = [];
+				
+				for(let i = 0; i < input.length; i++)
+				{
+					reverseBuffer[i] = input[input.length-i-1];
+				}
+				input = reverseBuffer;
+			}
+			
+			// migrate the IO gates to indexes
+			// iterate through all gates in input array
+			for(let i = 0; i < input.length; i++)
+			{
+				for(let k = 0; k < gateIds.length; k++)
+				{
+					// iterate through all migrated gateIds
+					// and find its new id eg. index in the array 
+					if(input[i].controller.id === gateIds[k])
+					{
+						// if the id was found, then store the gateIds index to the input array
+						input[i] = k;
+						break;
+					}
+				}
+			}
+			return input;
+		}
+		
+		function dbg()
+		{
+			let arr;
+			
+			// initializing all migrated gate arrays with 
+			for(let f = 0; f < 3; f++)
+			{
+				arr = [];
+				for(let i = 0; i < ioGatesIndexes[f].length;i++)
+				{
+					fileContents.bodies.forEach(body => {
+						body.childs.forEach(child => {
+							if(child.controller.id === gateIds[ioGatesIndexes[f][i]])
+							{
+								arr.push(child.pos.x + " | " + child.pos.y + " | " + child.color + " | " + f)
+							}
+						});
+					});
+				}
+				console.log(arr)
+			}
+			return;
+		}
+		
+		// Migrate all Gates into the gateTypes, gateConnections and gateIds. 
+		// also its going to initialize an empty array for gateStates.
+		function MigrateAllGates(data) {
+		
+			
+			// initializing all migrated gate arrays with 
+			data.bodies.forEach(body => {
+				body.childs.forEach(child => {
+					if(child.shapeId === logicGateUUID)
+					{
+						gateTypes.push(child.controller.mode);
+						gateStates.push(0);
+						gateIds.push(child.controller.id);
+						gateConnections.push([])
+					}
+				});
+			});
+			
+			// Literally dont remember how the following works exactly... thats why you comment and code simultaniously... i didnt
+			// the rest of this func basically migrates all the connections between gates.
+			// it also reverses the direction of them while doing so(so connections arent stored as outgoing to other gates,
+			// but rather pointing backwards to all the inputs of a gate)
+			
+			// iterate through all logic gates in the json
+			data.bodies.forEach(body => {
+				body.childs.forEach(child => {
+					if(child.shapeId === logicGateUUID 
+					&& child.controller !== null 
+					&& child.controller.controllers !== null)
+					{
+						// iterate through migrated gateIds
+						for(let j = 0; j < gateIds.length; j++)
+						{
+							// iterate through all connections of the json gate
+							for(let i = 0; i < child.controller.controllers.length; i++)
+							{
+								// check if any connection is equal to any id of any migrated gateIds
+								if(gateIds[j] === child.controller.controllers[i].id)
+								{
+									// iterate through all migrated gateIds and 
+									// find its new id eg. index in the array 
+									for(let k = 0; k < gateIds.length; k++)
+									{
+										if(child.controller.id === gateIds[k])
+										{
+											gateConnections[j].push(k);
+											break;
+										}
+									}
+								}
+							}
+						}
+					}
+				});
+			});			
+			return;
+		}
+		
+		// returns all logic gates that match either of the two colors
+		function findIoGates(data, color1, color2) {
+			let result = [];
+			
+			if (data && Array.isArray(data.bodies)) {
+				// iterate through all bodies of the json file
+				data.bodies.forEach(body => {
+					if (body.childs && Array.isArray(body.childs)) {
+						// iterate through all childs and check if its a logic gate, and matches either one of the colors in the func parameters
+						body.childs.forEach(child => {
+							if ((child.color === color1 || child.color === color2) 
+							&& child.shapeId === logicGateUUID) {
+								result.push(child);
+							}
+						});
+					}
+				});
+			} else {
+				console.error("Invalid data structure: data.bodies is not an array.");
+			}
+			
+			return result;
+		}
+		
+		document.getElementById('ImportBlueprint').addEventListener('click', function() {
+			document.getElementById('fileInput').click();
+		});
+		
+		//validate the file once it has been loaded and parse it.
+		document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        fileContents = JSON.parse(e.target.result);
+                        document.getElementById('LoadedFileName').textContent = file.name;
+                    } catch (error) {
+                        alert("Failed to parse JSON file.");
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+		
+		document.getElementById('UseTwosComplement').addEventListener('click', function() {
+			testConfig[2] = !testConfig[2];
+			document.getElementById('UseTwosComplement').innerText = testConfig[2];
+		});
+		document.getElementById('pastChart').addEventListener('click', function() {
+			chartConfig[1]--;
+			if(chartConfig[1] < 0){chartConfig[1]+=3}
+			UpdateChart();
+		});
+		document.getElementById('nextChart').addEventListener('click', function() {
+			chartConfig[1]++;
+			if(chartConfig[1] > 2){chartConfig[1]-=3}
+			UpdateChart();
+		});
+		
+		document.getElementById('UseLogView').addEventListener('click', function() {
+			chartConfig[0] = !chartConfig[0];
+			document.getElementById('UseLogView').innerText = chartConfig[0];
+			
+			if(chartConfig[0] === false)
+			{
+				lineChart.options.scales.y.type = 'linear';
+			}
+			else
+			{	
+				lineChart.options.scales.y.type = 'logarithmic';
+			}
+			lineChart.update();
+		});
+		
+		// handling the Start test button, also some input validation checks are done.
+		document.getElementById('StartTest').addEventListener('click', function() {
+			let valueValidityCheck = true;
+			
+			for(let i = 0; i < 2; i++)
+			{
+				testConfig[i] = document.getElementById("testConfig" + i).value;
+			}
+			
+			if(testIsRunning)
+			{
+				return;
+			}
+			
+			if(fileContents === undefined || fileContents === null)
+			{
+				alert("Please import a blueprint file first");
+				return;
+			};
+			
+			if(testConfig[0] === "" || testConfig[1] === "")
+			{
+				valueValidityCheck = false;
+			}
+			
+			if(!valueValidityCheck)
+			{
+				alert("Please configure the test config first");
+			}
+			else
+			{
+				InitializeAndStartFuzz();
+			}
+		});
+		
+		function handleInputChange(inputIndex) {
+			return function(event) {
+				
+				if(inputIndex == 1)
+				{
+					// if this is the text field for the timeout in ticks, replace any non numeric characters as they are not allowed
+					event.target.value = event.target.value.replace(/\D/g, '');
+				}
+				if(testIsRunning)
+				{
+					// if the test is running, reset the input field just to be sure.
+					event.target.value = testConfig[inputIndex];
+				}
+				else
+				{
+					// if the test isnt running, store the new input to testConfig at its correct index
+					testConfig[inputIndex] = event.target.value;
+				}
+			}
+		}
+
+		// add event listeners for the input fields
+        document.addEventListener("DOMContentLoaded", function() {
+            const inputFields = document.querySelectorAll("input[type='text']");
+            inputFields[0].addEventListener("input", handleInputChange(0));
+            inputFields[1].addEventListener("input", handleInputChange(1));
+        });
+		
+		// chart.js custom tooltip background/text container
+		// honestly i stole a template generated by chatGPT and changed it a lot.
+		// theres prob. a lot of redundancy
+		const getOrCreateTooltip = (chart) => {
+			let tooltipEl = chart.canvas.parentNode.querySelector('div');
+
+			if (!tooltipEl) {
+				tooltipEl = document.createElement('div');
+				tooltipEl.style.background = 'rgba(20, 30, 36, 0.7)';
+				tooltipEl.style.borderRadius = '3px';
+				tooltipEl.style.color = 'white';
+				tooltipEl.style.opacity = 1;
+				tooltipEl.style.pointerEvents = 'none';
+				tooltipEl.style.position = 'absolute';
+				tooltipEl.style.justifyContent = 'flex-end';
+				tooltipEl.style.transform = 'translate(-50%, 0)';
+				tooltipEl.style.transition = 'all 0.2s ease';
+				tooltipEl.style.padding = "10px";
+				tooltipEl.style.border = "4px solid #141E24";
+				tooltipEl.style.transition = "opacity .1s";
+				tooltipEl.style.color = "#92c5ce";
+				tooltipEl.style.borderRadius = "20px";
+
+				const table = document.createElement('table');
+				table.style.margin = '5px';
+
+				tooltipEl.appendChild(table);
+				chart.canvas.parentNode.appendChild(tooltipEl);
+			}
+
+			return tooltipEl;
+		};
+		
+		// chart.js custom tooltip text content
+		// honestly i stole a template generated by chatGPT and changed it a lot.
+		// theres prob. a lot of redundancy
+		const externalTooltipHandler = (context) => {
+			// Tooltip Element
+			const {chart, tooltip} = context;
+			const tooltipEl = getOrCreateTooltip(chart);
+
+			// Hide if no tooltip
+			if (tooltip.opacity === 0) {
+				tooltipEl.style.opacity = 0;
+				return;
+			}
+			
+			// Set Text
+			if (tooltip.body) {
+				const titleLines = tooltip.title || [];
+				const bodyLines = tooltip.body.map(b => b.lines);
+
+				const tableHead = document.createElement('thead');
+				
+				titleLines.forEach(title => {
+					const tr = document.createElement('tr');
+					tr.style.borderWidth = 0;
+
+					const th = document.createElement('th');
+					th.style.borderWidth = 0;
+					th.style.whiteSpace = "pre";
+
+					
+					const titleIndex = tooltip.dataPoints[0].dataIndex;
+					var text;
+					
+					// if label is a string and not a number, display the title soley. if it is a number, add a suffix
+					if(isNaN(Number(title)))
+					{
+						text = title + "\n";
+					}
+					else if(Number(title) != 1)
+					{
+						text = title + " ticks\n";
+					}
+					else
+					{
+						text = title + " tick\n";
+					}
+					
+					// append how many cases have been recorded at that column
+					text += rawChartData[chartConfig[1]][titleIndex];
+					
+					// add suffix
+					if(rawChartData[chartConfig[1]][titleIndex] != 1)
+					{
+						text += " cases:\n";
+					}
+					else
+					{
+						text += " case:\n";
+					}
+
+					// append all recorded cases for titleIndex
+					for(let i = 0; i < rawChartDataLoggedCases[chartConfig[1]][titleIndex].length; i++)
+					{
+						for(let j = 0; j < rawChartDataLoggedCases[chartConfig[1]][titleIndex][i].length; j++)
+						{
+							text += " " + rawChartDataLoggedCases[chartConfig[1]][titleIndex][i][j] + " ";
+						}
+						text += '';
+						text += '\n';
+					}
+					
+					text = document.createTextNode(text);
+					
+					th.appendChild(text);
+					tr.appendChild(th);
+					tableHead.appendChild(tr);
+				});
+
+				const tableRoot = tooltipEl.querySelector('table');
+
+				// Remove old children
+				while (tableRoot.firstChild) {
+					tableRoot.firstChild.remove();
+				}
+
+				// Add new children
+				tableRoot.appendChild(tableHead);
+			}
+
+			// Get canvas offset
+			const {offsetLeft: positionX, offsetTop: positionY} = chart.canvas;
+
+			// Calculate new position
+			const marginTop = 100;
+			tooltipEl.style.opacity = 1;
+			tooltipEl.style.left = positionX + tooltip.caretX + 'px';
+			tooltipEl.style.top = marginTop + 'px';
+			tooltipEl.style.font = tooltip.options.bodyFont.string;
+			tooltipEl.style.padding = tooltip.options.padding + 'px ' + tooltip.options.padding + 'px';
+		};
+		
+        const ctx = document.getElementById('lineChart').getContext('2d');
+        const lineChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Loading...',
+                    backgroundColor: "#3A8194",
+                    borderColor: "#65B0C2",
+                    data: [0, 10, 5, 2, 20, 30, 45],
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+				borderWidth: 4,
+				borderRadius: 20,
+				borderSkipped: false,
+				
+				plugins: {
+					tooltip: {
+						enabled: false,
+						position: 'nearest',
+						external: externalTooltipHandler,
+						yAlign: "top"
+					},
+					legend: {
+						labels: {
+							color: "#92C5CE",
+							font: {
+                                size: 20
+                            }
+						}
+					}
+				},
+				
+				scales: {
+                    y: {
+						type: 'linear',
+                        ticks: {
+                            color: "#92C5CE",
+							font: {
+                                size: 20
+                            }
+                        },
+						grid: {
+                            color: "#316E7D",
+							lineWidth: 2
+                        },
+						border: {
+                            display: false
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: "#92C5CE",
+							font: {
+                                size: 20
+                            }
+                        },
+						grid: {
+                            color: "#316E7D", 
+							lineWidth: 0 
+                        }
+                    }
+                }
+            }
+        });
+		
+		UpdateChart();
+		
+        window.addEventListener('resize', () => {
+            lineChart.resize();
+        });
+		
+		// Cancel Button on the loading screen overlay
+		const overlay = document.getElementById('overlay');
+		const closeBtn = document.getElementById('CancelTestButton');
+		closeBtn.addEventListener('click', function() {
+			overlay.style.display = 'none';
+			worker.terminate();
+			UpdateChart();
+			testIsRunning = false;
+			console.log("Test canceled!");
+		});
+		
+    </script>
+</body>
+</html>
